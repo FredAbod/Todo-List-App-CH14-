@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const otpGenerator = require("otp-generator");
 const User = require("../models/user.schema");
 
 exports.signup = async (req, res) => {
@@ -27,6 +28,8 @@ exports.signup = async (req, res) => {
       return res.status(409).json({ message: "User already exists" });
     }
 
+    // const otp =  otpGenerator.generate(6, { upperCaseAlphabets: false, specialChars: false, Digits: true });
+    const otp = Math.floor(100000 + Math.random() * 900000);
     // Hashing Our Password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -35,6 +38,7 @@ exports.signup = async (req, res) => {
       userName,
       password: hashedPassword,
       email,
+      otp: otp,
     });
 
     await newUser.save();
@@ -98,7 +102,7 @@ exports.addList = async (req, res) => {
       return res.status(404).json({ message: "User Not Found" });
     }
 
-    user.list.push({description: description});
+    user.list.push({ description: description });
 
     await user.save();
     return res
