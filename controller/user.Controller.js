@@ -1,5 +1,5 @@
 const bcrypt = require("bcryptjs");
-const jwt = require('jsonwebtoken')
+const jwt = require("jsonwebtoken");
 const User = require("../models/user.schema");
 
 exports.signup = async (req, res) => {
@@ -71,13 +71,41 @@ exports.login = async (req, res) => {
     }
 
     // Generate a token
-    const token =  jwt.sign({ userId: user._id}, process.env.SECRET_KEY, {
+    const token = jwt.sign({ userId: user._id }, process.env.SECRET_KEY, {
       expiresIn: "1h", // Token expiration time
     });
 
-    return res.status(200).json({ message: "User Logged In Succesfully", token: token, user });
+    return res
+      .status(200)
+      .json({ message: "User Logged In Succesfully", token: token, user });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Error Logging In User", err });
+  }
+};
+
+exports.addList = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { description } = req.body;
+    if (!description) {
+      return res
+        .status(400)
+        .json({ message: "Please input Description For Your List" });
+    }
+    const user = await User.findById({ _id: id });
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+
+    user.list.push({description: description});
+
+    await user.save();
+    return res
+      .status(200)
+      .json({ message: "Todo List Saved Successfully", user });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Error Saving List", err });
   }
 };
