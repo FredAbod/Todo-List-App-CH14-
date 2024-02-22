@@ -1,7 +1,11 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
 const otpGenerator = require("otp-generator");
 const User = require("../models/user.schema");
+const emailSender = require("../middleware/email");
+
+
 
 exports.signup = async (req, res) => {
   try {
@@ -30,6 +34,7 @@ exports.signup = async (req, res) => {
 
     // const otp =  otpGenerator.generate(6, { upperCaseAlphabets: false, specialChars: false, Digits: true });
     const otp = Math.floor(100000 + Math.random() * 900000);
+
     // Hashing Our Password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -42,6 +47,8 @@ exports.signup = async (req, res) => {
     });
 
     await newUser.save();
+
+    await emailSender(email, userName)
 
     return res
       .status(201)
