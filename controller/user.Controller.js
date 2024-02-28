@@ -5,8 +5,6 @@ const otpGenerator = require("otp-generator");
 const User = require("../models/user.schema");
 const emailSender = require("../middleware/email");
 
-
-
 exports.signup = async (req, res) => {
   try {
     const { userName, password, email } = req.body;
@@ -48,7 +46,7 @@ exports.signup = async (req, res) => {
 
     await newUser.save();
 
-    await emailSender(email, userName)
+    await emailSender(email, userName, otp);
 
     return res
       .status(201)
@@ -120,3 +118,227 @@ exports.addList = async (req, res) => {
     return res.status(500).json({ message: "Error Saving List", err });
   }
 };
+
+exports.updateListDescription = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const listId = req.params.listId;
+    const { newDescription } = req.body;
+
+    if (!newDescription) {
+      return res.status(400).json({
+        message: "Please provide a new description for your list item",
+      });
+    }
+
+    const user = await User.findById({ _id: userId });
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+
+    const listItem = user.list.id(listId);
+    if (!listItem) {
+      return res.status(404).json({ message: "List Item Not Found" });
+    }
+
+    listItem.description = newDescription;
+
+    await user.save();
+    return res
+      .status(200)
+      .json({ message: "List Item Description Updated Successfully", user });
+  } catch (err) {
+    console.error(err);
+    return res
+      .status(500)
+      .json({ message: "Error updating list item description", err });
+  }
+};
+
+exports.updateEmail = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { newEmail } = req.body;
+
+    if (!newEmail) {
+      return res.status(400).json({ message: "Please provide your new email" });
+    }
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+
+    user.email = newEmail;
+
+    await user.save();
+
+    return res
+      .status(200)
+      .json({ message: "Email Updated Successfully", user });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Error updating email", err });
+  }
+};
+
+exports.completedToDo = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const listId = req.params.listId;
+    console.log("completed");
+    const user = await User.findById({ _id: userId });
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+
+    const completedList = user.list.id(listId);
+    if (!completedList) {
+      return res.status(404).json({ message: "List Item Not Found" });
+    }
+
+    completedList.completed = true;
+
+    await user.save();
+    return res.status(200).json({
+      message: "YHeeehhh You have Completed Your Todos Successfully",
+      user,
+    });
+  } catch (err) {
+    console.error(err);
+    return res
+      .status(500)
+      .json({ message: "Error updating list item description", err });
+  }
+};
+
+exports.getAllList = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+    const allList = user.list;
+    return res.status(200).json({
+      message: "All ToDo List Fetched Successfully",
+      data: allList.length,
+      allList,
+    });
+  } catch (err) {
+    console.error(err);
+    return res
+      .status(500)
+      .json({ message: "Error updating list item description", err });
+  }
+};
+
+
+exports.getAllListAndPaginate = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 10;
+
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = page * pageSize;
+
+    const allList = user.list.slice(startIndex, endIndex);
+
+    return res.status(200).json({
+      message: "All ToDo List Fetched Successfully",
+      data: {
+        totalItems: user.list.length,
+        currentPage: page,
+        pageSize: pageSize,
+        totalPages: Math.ceil(user.list.length / pageSize),
+        currentItems: allList.length,
+        items: allList,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Error fetching ToDo list", err });
+  }
+};
+
+exports.completedToDoList = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+
+    const completedList = user.list.filter((item) => item.completed === true);
+
+    return res.status(200).json({
+      message: "Completed ToDo List Fetched Successfully",
+      data: completedList.length,
+      completedList,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Error fetching completed ToDo list", err });
+  }
+};
+
+const express = require("express");
+const router = express.Router();
+
+exports.filterByDescription = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const pattern = req.query.pattern;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+
+    const descriptionRegex = new RegExp(pattern, "i");
+    const filteredList = user.list.filter((item) => descriptionRegex.test(item.description));
+
+    return res.status(200).json({
+      message: "Filtered ToDo List by Description Successfully",
+      data: filteredList.length,
+      filteredList,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Error fetching filtered ToDo list", err });
+  }
+};
+
+// exports.filterByDate = async (req, res) => {
+//   try {
+//     const userId = req.params.id;
+//     const pattern = req.query.pattern;
+//     const user = await User.findById(userId);
+
+//     if (!user) {
+//       return res.status(404).json({ message: "User Not Found" });
+//     }
+
+//     const dateRegex = new RegExp(pattern, "i");
+//     const filteredList = user.list.filter((item) => dateRegex.test(item.date));
+
+//     return res.status(200).json({
+//       message: "Filtered ToDo List by Date Successfully",
+//       data: filteredList.length,
+//       filteredList,
+//     });
+//   } catch (err) {
+//     console.error(err);
+//     return res.status(500).json({ message: "Error fetching filtered ToDo list", err });
+//   }
+// };

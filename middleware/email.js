@@ -1,6 +1,6 @@
 const nodemailer = require("nodemailer");
 
-const emailSender = async (email, userName) => {
+const emailSender = async (email, userName, otp) => {
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -14,7 +14,7 @@ const emailSender = async (email, userName) => {
       to: email,
       subject: 'Welcome To TodoList App',
       text: `Welcome ${userName} to TodoList
-      You're highly welcomed`
+      You're highly welcomed. This is your otp: ${otp}`
   
     }
   
