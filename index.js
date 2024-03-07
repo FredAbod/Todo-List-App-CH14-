@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const morgan = require("morgan");
 const { connectDB } = require("./config/db");
 const userRouter = require('./routes/user.routes')
+const adminRouter = require('./routes/admin.routes')
 
 
 const app = express();
@@ -18,6 +19,7 @@ app.get("/", (req, res) => {
 });
 
 app.use('/api/v1/user', userRouter)
+app.use('/api/v1/admin', adminRouter)
 
 // @404 page
 app.get("*", (req, res) => {
