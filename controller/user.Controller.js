@@ -1,9 +1,11 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const ejs = require("ejs");
+const path = require("path");
 const nodemailer = require("nodemailer");
 const otpGenerator = require("otp-generator");
 const User = require("../models/user.schema");
-const emailSender = require("../middleware/email");
+// const emailSender = require("../middleware/email");
 
 exports.signup = async (req, res) => {
   try {
@@ -12,7 +14,7 @@ exports.signup = async (req, res) => {
     if (!userName || !password || !email) {
       return res
         .status(400)
-        .json({ message: "Please provide username, password, and email" });
+        .json({ message: "Please provide userName, password, and email" });
     }
 
     // Password validation: Must contain at least one uppercase, one lowercase, one number, and one special character
@@ -30,8 +32,8 @@ exports.signup = async (req, res) => {
       return res.status(409).json({ message: "User already exists" });
     }
 
-    // const otp =  otpGenerator.generate(6, { upperCaseAlphabets: false, specialChars: false, Digits: true });
     const otp = Math.floor(100000 + Math.random() * 900000);
+    const otpCreationTime = Date.now(); // Store the creation time of OTP
 
     // Hashing Our Password
     const saltRounds = 10;
@@ -42,11 +44,24 @@ exports.signup = async (req, res) => {
       password: hashedPassword,
       email,
       otp: otp,
+      otpCreatedAt: otpCreationTime, // Store the creation time of OTP
     });
 
     await newUser.save();
 
-    await emailSender(email, userName, otp);
+    // Send email with OTP
+    await ejs.renderFile(
+      path.join(__dirname, "../public/signUp.ejs"),
+      {
+        title: `Hello ${userName},`,
+        body: "Welcome",
+        userName: userName,
+        otp: otp,
+      },
+      async (err, data) => {
+        await emailSenderTemplate(data, "Welcome to Todo List App!", email);
+      }
+    );
 
     return res
       .status(201)
@@ -54,6 +69,46 @@ exports.signup = async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Error saving user", err });
+  }
+};
+
+
+exports.verifyOtp = async (req, res) => {
+  try {
+    const otp = req.query.otp;
+
+    if (!otp) {
+      return res.status(400).json({ message: "Please Input Your Otp" });
+    }
+
+    const user = await User.findOne({ otp: otp });
+
+    if (!user) {
+      return res.status(400).json({ message: "User With That OTP Not Found" });
+    }
+
+    if (user.otp !== otp) {
+      return res.status(400).json({ message: "Invalid Otp" });
+    }
+
+    // Check if OTP has expired
+    const otpCreationTime = user.otpCreatedAt;
+    const currentTime = Date.now();
+    const otpValidityPeriod = 1 * 60 * 1000; // 1 minutes in milliseconds
+
+    if (currentTime - otpCreationTime > otpValidityPeriod) {
+      return res.status(400).json({ message: "OTP has expired" });
+    }
+
+    user.isVerified = true;
+    user.otp = null;
+
+    await user.save();
+
+    return res.status(200).json({ message: "OTP Verified Successfully", user });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Error Verifying Otp", err });
   }
 };
 
@@ -73,6 +128,11 @@ exports.login = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "User Not Found, Please Signup" });
     }
+    if (user.isVerified == "false") {
+      return res
+        .status(404)
+        .json({ message: "User Not Verified, Please Check Your Mail" });
+    }
 
     const correctPassword = await bcrypt.compare(password, user.password);
     if (!correctPassword) {
@@ -84,6 +144,18 @@ exports.login = async (req, res) => {
       expiresIn: "1h", // Token expiration time
     });
 
+    await ejs.renderFile(
+      path.join(__dirname, "../public/login.ejs"),
+      {
+        title: `Hello ${userName},`,
+        body: "You Just Logged In",
+        userName: userName,
+      },
+      async (err, data) => {
+        await emailSenderTemplate(data, "Login Succesfull!", user.email);
+      }
+    );
+
     return res
       .status(200)
       .json({ message: "User Logged In Succesfully", token: token, user });
@@ -92,6 +164,53 @@ exports.login = async (req, res) => {
     return res.status(500).json({ message: "Error Logging In User", err });
   }
 };
+
+exports.resendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Please provide an email" });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(400).json({ message: "User with that email not found" });
+    }
+
+    // Generate new OTP
+    const otp = Math.floor(100000 + Math.random() * 900000);
+    const otpCreationTime = Date.now(); // Store the creation time of OTP
+
+    // Update user with new OTP and creation time
+    user.otp = otp;
+    user.otpCreatedAt = otpCreationTime;
+    user.isVerified = false; // Reset verification status
+
+    await user.save();
+
+    // Send email with new OTP
+    await ejs.renderFile(
+      path.join(__dirname, "../public/resendOtp.ejs"),
+      {
+        title: `Hello ${user.userName},`,
+        body: "Welcome",
+        userName: user.userName,
+        otp: otp,
+      },
+      async (err, data) => {
+        await emailSenderTemplate(data, "Resent OTP for Todo List App", email);
+      }
+    );
+
+    return res.status(200).json({ message: "OTP resent successfully" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Error resending OTP", err });
+  }
+};
+
 
 exports.addList = async (req, res) => {
   try {
@@ -235,7 +354,6 @@ exports.getAllList = async (req, res) => {
   }
 };
 
-
 exports.getAllListAndPaginate = async (req, res) => {
   try {
     const id = req.params.id;
@@ -288,11 +406,14 @@ exports.completedToDoList = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ message: "Error fetching completed ToDo list", err });
+    return res
+      .status(500)
+      .json({ message: "Error fetching completed ToDo list", err });
   }
 };
 
 const express = require("express");
+const { emailSenderTemplate } = require("../middleware/email");
 const router = express.Router();
 
 exports.filterByDescription = async (req, res) => {
@@ -306,7 +427,9 @@ exports.filterByDescription = async (req, res) => {
     }
 
     const descriptionRegex = new RegExp(pattern, "i");
-    const filteredList = user.list.filter((item) => descriptionRegex.test(item.description));
+    const filteredList = user.list.filter((item) =>
+      descriptionRegex.test(item.description)
+    );
 
     return res.status(200).json({
       message: "Filtered ToDo List by Description Successfully",
@@ -315,7 +438,9 @@ exports.filterByDescription = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ message: "Error fetching filtered ToDo list", err });
+    return res
+      .status(500)
+      .json({ message: "Error fetching filtered ToDo list", err });
   }
 };
 
