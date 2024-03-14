@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const ejs = require("ejs");
 const path = require("path");
+const cloudinary = require("../public/image/cloudinary");
 const nodemailer = require("nodemailer");
 const otpGenerator = require("otp-generator");
 const User = require("../models/user.schema");
@@ -51,7 +52,7 @@ exports.signup = async (req, res) => {
 
     // Send email with OTP
     await ejs.renderFile(
-      path.join(__dirname, "../public/signUp.ejs"),
+      path.join(__dirname, "../public/Email/signUp.ejs"),
       {
         title: `Hello ${userName},`,
         body: "Welcome",
@@ -71,7 +72,6 @@ exports.signup = async (req, res) => {
     return res.status(500).json({ message: "Error saving user", err });
   }
 };
-
 
 exports.verifyOtp = async (req, res) => {
   try {
@@ -145,7 +145,7 @@ exports.login = async (req, res) => {
     });
 
     await ejs.renderFile(
-      path.join(__dirname, "../public/login.ejs"),
+      path.join(__dirname, "../public/Email/login.ejs"),
       {
         title: `Hello ${userName},`,
         body: "You Just Logged In",
@@ -176,7 +176,9 @@ exports.resendOtp = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(400).json({ message: "User with that email not found" });
+      return res
+        .status(400)
+        .json({ message: "User with that email not found" });
     }
 
     // Generate new OTP
@@ -192,7 +194,7 @@ exports.resendOtp = async (req, res) => {
 
     // Send email with new OTP
     await ejs.renderFile(
-      path.join(__dirname, "../public/resendOtp.ejs"),
+      path.join(__dirname, "../public/Email/resendOtp.ejs"),
       {
         title: `Hello ${user.userName},`,
         body: "Welcome",
@@ -210,7 +212,6 @@ exports.resendOtp = async (req, res) => {
     return res.status(500).json({ message: "Error resending OTP", err });
   }
 };
-
 
 exports.addList = async (req, res) => {
   try {
@@ -467,3 +468,36 @@ exports.filterByDescription = async (req, res) => {
 //     return res.status(500).json({ message: "Error fetching filtered ToDo list", err });
 //   }
 // };
+
+//upload Profile Picture
+exports.uploadPicture = async (req, res) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id });
+    if (!user) {
+      return errorResMsg(res, 400, "User not found");
+    }
+    const result = await cloudinary.v2.uploader.upload(req.file.path);
+    const updatedUser = await User.findByIdAndUpdate(
+      {
+        _id: req.params.id,
+      },
+      { profilePic: result.secure_url },
+      {
+        isNew: true,
+      }
+    );
+
+    return res
+      .status(200)
+      .json({
+        message: "Profile Pictur Saved Successfully",
+        data: updatedUser,
+      });
+  } catch (err) {
+    // console.log(error);
+    console.error(err);
+    return res
+      .status(500)
+      .json({ message: "Error Uploading Profile Picture", err });
+  }
+};

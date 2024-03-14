@@ -13,7 +13,9 @@ const {
   filterByDate,
   verifyOtp,
   resendOtp,
+  uploadPicture,
 } = require("../controller/user.Controller");
+const upload = require("../public/image/multer");
 const router = express.Router();
 
 router.get("/getalllist/:id", getAllList);
@@ -29,5 +31,6 @@ router.post("/savelist/:id", addList);
 router.post("/completed/:id/:listId", completedToDo);
 router.put("/updatelist/:id/:listId", updateListDescription);
 router.put("/updateEmail/:id", updateEmail);
+router.put("/profilepic/:id", upload.single("profilePic"), uploadPicture);
 
 module.exports = router;
