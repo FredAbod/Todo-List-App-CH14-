@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const ejs = require("ejs");
 const path = require("path");
+const { v4: uuidv4 } = require("uuid");
 const cloudinary = require("../public/image/cloudinary");
 const nodemailer = require("nodemailer");
 const otpGenerator = require("otp-generator");
@@ -114,15 +115,15 @@ exports.verifyOtp = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    const { userName, password } = req.body;
-    if (!userName || !password) {
+    const { email, password } = req.body;
+    if (!email || !password) {
       return res
         .status(400)
-        .json({ message: "Please input your username and password" });
+        .json({ message: "Please input your email and password" });
     }
 
     // Find The User By Email In The Database
-    const user = await User.findOne({ userName });
+    const user = await User.findOne({ email });
 
     // If You're Not A User, Sign Up
     if (!user) {
@@ -147,9 +148,9 @@ exports.login = async (req, res) => {
     await ejs.renderFile(
       path.join(__dirname, "../public/Email/login.ejs"),
       {
-        title: `Hello ${userName},`,
+        title: `Hello ${user.userName},`,
         body: "You Just Logged In",
-        userName: userName,
+        userName: user.userName,
       },
       async (err, data) => {
         await emailSenderTemplate(data, "Login Succesfull!", user.email);
@@ -490,7 +491,7 @@ exports.uploadPicture = async (req, res) => {
     return res
       .status(200)
       .json({
-        message: "Profile Pictur Saved Successfully",
+        message: "Profile Picture Saved Successfully",
         data: updatedUser,
       });
   } catch (err) {
@@ -501,3 +502,83 @@ exports.uploadPicture = async (req, res) => {
       .json({ message: "Error Uploading Profile Picture", err });
   }
 };
+
+exports.forgotPassword = async (req,res) => {
+  try {
+  const {email} = req.body;
+    if(!email) {
+      return res.status(400).json({ message: "Please Input Your Email" });
+
+    }
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User Not Found" });
+    }
+
+    const token = uuidv4();
+
+    user.resetToken = token;
+    user.save();
+
+    // Send email with OTP
+    await ejs.renderFile(
+      path.join(__dirname, "../public/Email/forgotPassword.ejs"),
+      {
+        title: `Reset Your Password,`,
+        body: "Welcome",
+        resetToken: token,
+      },
+      async (err, data) => {
+        await emailSenderTemplate(data, "Reset Your Password", email);
+      }
+    );
+    return res
+      .status(201)
+      .json({ message: "Check Your Mail To Reset Your Password", user });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Error saving user", err });
+  }
+}
+
+exports.resetPassword = async (req, res) =>{
+  try {
+    const token = req.params.token;
+    const {newPassword, confirmPassword} = req.body
+    if(!token) {
+      return res.status(400).json({ message: "Please Input Your Reset Token" });
+    }
+    if(newPassword !== confirmPassword) {
+      return res.status(400).json({ message: "Password Does Not Match" });
+
+    }
+
+    const user = await User.findOne({resetToken: token});
+    if (!user) {
+      return res.status(404).json({ message: "User With This Token Can Not Be Found" });
+    }
+const hashPassword = await bcrypt.hash(newPassword, 10)
+user.password = hashPassword;
+
+await user.save();
+
+    // Send email with OTP
+    await ejs.renderFile(
+      path.join(__dirname, "../public/Email/resetPasssword.ejs"),
+      {
+        title: `Hello ${user.userName},`,
+        body: "Password Reset Successfully, Please Login",
+      },
+      async (err, data) => {
+        await emailSenderTemplate(data, "Password Reset Succesfully!", user.email);
+      }
+    );
+
+return res
+      .status(200)
+      .json({ message: "Password Reset successfully", user });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Error Reseting Password", err });
+  }
+}

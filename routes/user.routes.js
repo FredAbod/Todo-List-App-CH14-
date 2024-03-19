@@ -14,6 +14,8 @@ const {
   verifyOtp,
   resendOtp,
   uploadPicture,
+  forgotPassword,
+  resetPassword,
 } = require("../controller/user.Controller");
 const upload = require("../public/image/multer");
 const router = express.Router();
@@ -27,6 +29,8 @@ router.post("/signup", signup);
 router.post("/login", login);
 router.post("/verify", verifyOtp);
 router.post("/resend", resendOtp);
+router.post("/forgotPassword", forgotPassword);
+router.post("/reset/:token", resetPassword);
 router.post("/savelist/:id", addList);
 router.post("/completed/:id/:listId", completedToDo);
 router.put("/updatelist/:id/:listId", updateListDescription);
