@@ -61,6 +61,7 @@ passport.use(
         const newUser = await new User({
           userName: profile.displayName,
           googleId: profile.id,
+          isVerified: true
         }).save();
 
         done(null, newUser);
